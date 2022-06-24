@@ -119,9 +119,9 @@ def iterate_dbs(dbs, fs_methods):
         ###################
 
         n_iters = 0
-        k_and_features_to_keep_dict = {}
 
         for fs_method in fs_methods:
+            k_and_features_to_keep_dict = {}
             last_k = -1
             fs_method_name = fs_method.__name__
             run_times['fs_method'][fs_method_name] = {}
@@ -191,7 +191,7 @@ def iterate_dbs(dbs, fs_methods):
 
                 evaluations = evaluate_models(accumulated_preds, accumulated_y_test)
                 export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method, n_splits_cv,
-                            X, fs_method.__name__)
+                            df, fs_method.__name__)
 
 
 def get_features_scores(scores, df, k):
@@ -350,7 +350,7 @@ def evaluate_models(accumulated_preds, accumulated_y_test):
     return models_scores
 
 
-def export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method, n_splits_cv, X, fs_method):
+def export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method, n_splits_cv, df, fs_method):
     db_rows_data = []
 
     for model in MODELS:
@@ -364,7 +364,7 @@ def export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv
             predict_method_time = run_times['predict'][model_name][k]
 
             for score_method, score in evaluations[model_name][k].items():
-                single_row_data = [df_name, len(X.index), len(X.columns), 'filtering algorithm', model_name,
+                single_row_data = [df_name, len(df.index), len(df.columns), fs_method, model_name,
                                    k, cv_method.__name__, n_splits_cv, score_method, score, str(features),
                                    features_scores,
                                    fs_method_time, fit_method_time, predict_method_time]
