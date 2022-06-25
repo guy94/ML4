@@ -105,10 +105,10 @@ def iterate_dbs(dbs, fs_methods):
         X = df.loc[:, df.columns != 'y']
         y = df['y']
 
-        # if is_select_k_best:
-        #     selector = SelectKBest(f_classif, k=1000).fit(X, y)
-        #     cols = selector.get_support(indices=True)
-        #     X = X.iloc[:, cols]
+        if is_select_k_best:
+            selector = SelectKBest(f_classif, k=1000).fit(X, y)
+            cols = selector.get_support(indices=True)
+            X = X.iloc[:, cols]
 
         accumulated_preds = {}  # {[model]: {k: preds}}
         accumulated_y_test = {}  # {k: y_test}
