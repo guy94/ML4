@@ -15,6 +15,8 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import LabelEncoder, KBinsDiscretizer
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, matthews_corrcoef, roc_auc_score, average_precision_score
+from sklearn.pipeline import Pipeline
+
 
 random_forest = RandomForestClassifier(min_samples_leaf=2, max_depth=13)
 svm = SVC()
@@ -103,10 +105,10 @@ def iterate_dbs(dbs, fs_methods):
         X = df.loc[:, df.columns != 'y']
         y = df['y']
 
-        if is_select_k_best:
-            selector = SelectKBest(f_classif, k=1000).fit(X, y)
-            cols = selector.get_support(indices=True)
-            X = X.iloc[:, cols]
+        # if is_select_k_best:
+        #     selector = SelectKBest(f_classif, k=1000).fit(X, y)
+        #     cols = selector.get_support(indices=True)
+        #     X = X.iloc[:, cols]
 
         accumulated_preds = {}  # {[model]: {k: preds}}
         accumulated_y_test = {}  # {k: y_test}
@@ -164,19 +166,23 @@ def iterate_dbs(dbs, fs_methods):
                 new_X = X[cols]
 
                 for train_index, test_index in kf.split(new_X, y):
+                    steps = []
                     X_train, X_test, y_train, y_test = X.iloc[train_index], X.iloc[test_index], \
                                                        y.iloc[train_index], y.iloc[test_index]
 
-                    fill_na(X_train)
-                    fill_na(X_test)
-                    y_train.fillna(999, inplace=True)
-                    y_test.fillna(999, inplace=True)
+                    #                     fill_na(X_train)
+                    #                     fill_na(X_test)
+                    #                     y_train.fillna(999, inplace=True)
+                    #                     y_test.fillna(999, inplace=True)
 
-                    discretization(X_train)
-                    discretization(X_test)
+                    #                     discretization(X_train)
+                    #                     discretization(X_test)
+                    preprocess = preprocess_data
+                    steps.append((f'preproccess_{k}', preprocess(X_train, X_test, y_train, y_test)))
 
                     if not last_k == k:
-                        run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times)
+                        run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test,
+                                   run_times, steps)
                         last_k = k
                     n_iters += 1
 
@@ -192,6 +198,16 @@ def iterate_dbs(dbs, fs_methods):
                 evaluations = evaluate_models(accumulated_preds, accumulated_y_test)
                 export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method, n_splits_cv,
                             df, fs_method.__name__)
+
+
+def preprocess_data(x_train, x_test, y_train, y_test):
+    fill_na(x_train)
+    fill_na(x_test)
+    y_train.fillna(999, inplace=True)
+    y_test.fillna(999, inplace=True)
+
+    discretization(x_train)
+    discretization(x_test)
 
 
 def get_features_scores(scores, df, k):
@@ -277,7 +293,7 @@ def run_shap(X, y):
     # return k_and_features_dict
 
 
-def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times):
+def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times, steps):
     """
 
     :param X_train:
@@ -294,7 +310,10 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
     for model in MODELS:
         model_name = type(model).__name__
         start_time_fit_method = time.time()
-        model.fit(X_train, y_train)
+        steps.append((model_name, model))
+        pipe = Pipeline(steps = steps)
+        pipe.fit(X_train, y_train)
+#         model.fit(X_train, y_train)
         end_time_fit_method = time.time()
         fit_method_run_time = (end_time_fit_method - start_time_fit_method)
         if model_name not in run_times['fit']:
@@ -302,7 +321,8 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
         run_times['fit'][model_name][k] = fit_method_run_time
 
         start_time_predict_method = time.time()
-        y_pred = model.predict(X_test)
+#         y_pred = model.predict(X_test)
+        y_pred = pipe.predict(X_test)
         end_time_predict_method = time.time()
         predict_method_run_time = (end_time_predict_method - start_time_predict_method)
         if model_name not in run_times['predict']:
