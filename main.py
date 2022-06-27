@@ -6,15 +6,17 @@ from scipy.io import arff
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import SelectKBest, f_classif, SelectFdr, chi2, RFE
+from sklearn.feature_selection import SelectKBest, f_classif, SelectFdr, chi2, RFE, VarianceThreshold
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold, LeavePOut
 from BorutaShap import BorutaShap
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.preprocessing import LabelEncoder, KBinsDiscretizer
+from sklearn.preprocessing import LabelEncoder, KBinsDiscretizer, PowerTransformer
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, matthews_corrcoef, roc_auc_score, average_precision_score
+from scipy.stats import friedmanchisquare
+import scikit_posthocs as sp
 
 random_forest = RandomForestClassifier(min_samples_leaf=2, max_depth=13)
 svm = SVC()
@@ -22,10 +24,10 @@ knn = KNeighborsClassifier(n_neighbors=5)
 nb_classifier = GaussianNB()
 logistic = LogisticRegression(random_state=0)
 
-# models = [random_forest, svm, knn, nb_classifier, logistic]
+# MODELS = [random_forest, svm, knn, nb_classifier, logistic]
 MODELS = [nb_classifier]
 # posible_k = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]
-POSSIBLE_K = [3, 4]
+POSSIBLE_K = [2, 20]
 
 
 def read_dbs():
@@ -87,6 +89,20 @@ def discretization(df):
             df[col] = est.transform(values)
 
 
+def remove_variance_zero(df):
+    """
+
+    :param df:
+    :return:
+    """
+
+    selector = VarianceThreshold(0)
+    selector.fit(df)
+    col_idx = selector.get_support(indices=True).tolist()
+    cols = df.columns[col_idx]
+    return df[cols]
+
+
 def iterate_dbs(dbs, fs_methods):
     """
 
@@ -97,32 +113,27 @@ def iterate_dbs(dbs, fs_methods):
     for df_name, df in dbs.items():
         df.rename(columns=lambda x: str(x), inplace=True)
         cv_method, n_splits_cv, is_select_k_best = choose_method_for_cross_validation(df)
-        kf = cv_method(n_splits=n_splits_cv)
-        kf = KFold(n_splits=2)
+        # kf = cv_method(n_splits_cv)
+        kf = KFold(2)
         df.columns = [*df.columns[:-1], 'y']
         X = df.loc[:, df.columns != 'y']
         y = df['y']
+        power_transformer = PowerTransformer()
 
-        if is_select_k_best:
+        if is_select_k_best and X.shape[1] > 1000:
             selector = SelectKBest(f_classif, k=1000).fit(X, y)
             cols = selector.get_support(indices=True)
             X = X.iloc[:, cols]
 
-        accumulated_preds = {}  # {[model]: {k: preds}}
-        accumulated_y_test = {}  # {k: y_test}
         run_times = {'fs_method': {}, 'fit': {}, 'predict': {}}
-
-        ###################
-        # fill_na(X)
-        # y.fillna(999, inplace=True)
-        # discretization(X)
-        ###################
 
         n_iters = 0
 
         for fs_method in fs_methods:
+            accumulated_preds = {}  # {[model]: {k: preds}}
+            accumulated_y_test = {}  # {k: y_test}
+
             k_and_features_to_keep_dict = {}
-            last_k = -1
             fs_method_name = fs_method.__name__
             run_times['fs_method'][fs_method_name] = {}
 
@@ -152,8 +163,13 @@ def iterate_dbs(dbs, fs_methods):
                     cols = list(features_and_scores.keys())
 
                 elif fs_method_name == 'run_shap':
-                    pass
-                    features_and_scores = get_features_scores(selector.scores_, cols, X, k)
+                    all_features_and_scores = run_shap(X, y)
+                    sorted_features = sorted(all_features_and_scores, key=all_features_and_scores.get, reverse=True)
+                    selected_features = sorted_features[:k]
+                    features_and_scores = {}
+                    for feature in selected_features:
+                        features_and_scores[feature] = all_features_and_scores[feature]
+
                     cols = list(features_and_scores.keys())
 
                 end_time_fs_method = time.time()
@@ -162,9 +178,10 @@ def iterate_dbs(dbs, fs_methods):
 
                 k_and_features_to_keep_dict[k] = features_and_scores
                 new_X = X[cols]
+                new_X = remove_variance_zero(new_X)
 
                 for train_index, test_index in kf.split(new_X, y):
-                    X_train, X_test, y_train, y_test = X.iloc[train_index], X.iloc[test_index], \
+                    X_train, X_test, y_train, y_test = new_X.iloc[train_index], new_X.iloc[test_index], \
                                                        y.iloc[train_index], y.iloc[test_index]
 
                     fill_na(X_train)
@@ -175,23 +192,15 @@ def iterate_dbs(dbs, fs_methods):
                     discretization(X_train)
                     discretization(X_test)
 
-                    if not last_k == k:
-                        run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times)
-                        last_k = k
+                    # X_train = power_transformer.fit_transform(X_train)
+                    # X_test = power_transformer.fit_transform(X_test)
+
+                    run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times)
                     n_iters += 1
 
-                    # for k, features_dict in k_and_features_to_keep_dict.items():
-                    #     features = list(features_dict.keys())
-                    #     if not last_k == k:
-                    #         new_X_train = X_train[features]
-                    #         new_X_test = X_test[features]
-                    #         run_models(new_X_train, y_train, new_X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times)
-                    #     last_k = k
-                    # n_iters += 1
-
-                evaluations = evaluate_models(accumulated_preds, accumulated_y_test)
-                export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method, n_splits_cv,
-                            df, fs_method.__name__)
+            evaluations = evaluate_models(accumulated_preds, accumulated_y_test)
+            export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method.__name__, n_splits_cv,
+                        df, fs_method.__name__)
 
 
 def get_features_scores(scores, df, k):
@@ -219,9 +228,9 @@ def choose_method_for_cross_validation(df):
     df_count = len(df)
 
     if df_count < 50:
-        return LeavePOut, 2, True
-    elif 50 <= df_count < 100:
         return KFold, df_count, True
+    elif 50 <= df_count < 100:
+        return LeavePOut, 2, True
     elif 100 <= df_count < 1000:
         return KFold, 5, False
     elif 1000 <= df_count:
@@ -237,44 +246,15 @@ def run_shap(X, y):
     """
 
     selector = BorutaShap(importance_measure='shap', classification=True)
-    selector.fit_transform(X=X, y=y, n_trials=20, sample=False, verbose=True, normalize=True)
-    accepted_features_scores = selector.X_feature_import
-    accepted_features_names = selector.X.columns.values
-    names_and_scores_dict = dict(zip(accepted_features_names, accepted_features_scores))
+    selector.fit(X=X, y=y, n_trials=20, sample=False, verbose=True, normalize=True)
+    accepted_dict = dict(zip(selector.accepted, [1 for i in range(len(selector.accepted))]))
+    tentative_dict = dict(zip(selector.tentative, [0.5 for i in range(len(selector.tentative))]))
+    rejected_dict = dict(zip(selector.rejected, [0 for i in range(len(selector.rejected))]))
 
-    k_and_features_dict = {}
-    sorted_features = sorted(names_and_scores_dict, key=names_and_scores_dict.get, reverse=True)
+    return_dict = {**accepted_dict, **tentative_dict}
+    return_dict = {**rejected_dict, **return_dict}
 
-    # for k in [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]:
-    for k in POSSIBLE_K:
-        selected_features = sorted_features[:k]
-        features_and_scores = {}
-        for feature in selected_features:
-            features_and_scores[feature] = names_and_scores_dict[feature]
-
-        k_and_features_dict[k] = features_and_scores
-
-    return k_and_features_dict
-
-    # selector = BorutaShap(importance_measure='shap', classification=True)
-    # selector.fit(X=X, y=y, n_trials=20, sample=False, verbose=True, normalize=True)
-    # accepted_features_scores = selector.X_feature_import
-    # accepted_features_names = selector.X.columns.values
-    # names_and_scores_dict = dict(zip(accepted_features_names, accepted_features_scores))
-    #
-    # k_and_features_dict = {}
-    # sorted_features = sorted(names_and_scores_dict, key=names_and_scores_dict.get, reverse=True)
-    #
-    # # for k in [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]:
-    # for k in POSSIBLE_K:
-    #     selected_features = sorted_features[:k]
-    #     features_and_scores = {}
-    #     for feature in selected_features:
-    #         features_and_scores[feature] = names_and_scores_dict[feature]
-    #
-    #     k_and_features_dict[k] = features_and_scores
-    #
-    # return k_and_features_dict
+    return return_dict
 
 
 def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times):
@@ -350,7 +330,7 @@ def evaluate_models(accumulated_preds, accumulated_y_test):
     return models_scores
 
 
-def export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method, n_splits_cv, df, fs_method):
+def export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method_name, n_splits_cv, df, fs_method):
     db_rows_data = []
 
     for model in MODELS:
@@ -365,7 +345,7 @@ def export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv
 
             for score_method, score in evaluations[model_name][k].items():
                 single_row_data = [df_name, len(df.index), len(df.columns), fs_method, model_name,
-                                   k, cv_method.__name__, n_splits_cv, score_method, score, str(features),
+                                   k, cv_method_name, n_splits_cv, score_method, score, str(features),
                                    features_scores,
                                    fs_method_time, fit_method_time, predict_method_time]
                 print(single_row_data)
@@ -375,15 +355,70 @@ def export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv
     df.to_csv('output.csv', mode='a', header=False, index=False)
 
 
-if __name__ == '__main__':
-    # 'mRMR', 'f_classif', 'SelectFdr', 'ReliefF'
-    final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
-                                     'Filtering algorithm', 'Learning algorithm', 'Number of features selected', 'CV method', 'Fold',
-                                     'Measure type', 'Measure value', 'List of selected features names (long STRING)',
-                                     'Selected features scores', 'Feature selection run time', 'Fit run time',
-                                     'Predict run time'])
-    final_df.to_csv('output.csv', index=False)
+def run_toy_example():
 
-    fs_methods = [mrmr, SelectFdr, relief, f_classif]
-    dbs = read_dbs()
-    iterate_dbs(dbs, fs_methods)
+    data = pd.read_csv('data/toy/SPECTF.train', sep=",", header=None)
+    data.columns = [i for i in range(data.shape[1])]
+    data = data[data.columns[::-1]]
+    # last = data[data.columns[-1]]
+    # first = data.iloc[:, 0].copy()
+    # data.iloc[:, 0] = last.copy()
+    # data[data.columns[-1]] = first
+    # data = data.transpose()
+    return {'toy_example': data}
+
+
+def friedman_test():
+    """
+
+    :return:
+    """
+
+    all_aucs = []
+    algorithms_and_scores = {}
+    df = pd.read_csv('output_backup.csv')
+    grouped = df.groupby(['Dataset name', 'Filtering algorithm'])
+    for name, group in grouped:
+        aucs = group.loc[group['Measure type'] == 'auc_roc', 'Measure value']
+        all_aucs.append(aucs)
+        if name[1] not in algorithms_and_scores:
+            algorithms_and_scores[name[1]] = []
+        algorithms_and_scores[name[1]] += aucs.tolist()
+
+    fs_result = friedmanchisquare(*all_aucs)
+
+    # if fs_result.pvalue < 0.05:
+    if fs_result.pvalue < 0.2:
+        run_post_hoc(algorithms_and_scores)
+
+
+def run_post_hoc(algorithms_and_scores):
+    """
+
+    :param df:
+    :return:
+    """
+
+    df = pd.DataFrame.from_dict(algorithms_and_scores)
+    long_df = pd.melt(df, var_name='filtering algorithm', value_name='auc score')
+
+    print(sp.posthoc_dunn(long_df, val_col='auc score', group_col='filtering algorithm', p_adjust='bonferroni'))
+
+
+if __name__ == '__main__':
+    friedman_test()
+
+    # 'mRMR', 'f_classif', 'SelectFdr', 'ReliefF'
+    # final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
+    #                                  'Filtering algorithm', 'Learning algorithm', 'Number of features selected', 'CV method', 'Fold',
+    #                                  'Measure type', 'Measure value', 'List of selected features names (long STRING)',
+    #                                  'Selected features scores', 'Feature selection run time', 'Fit run time',
+    #                                  'Predict run time'])
+    # final_df.to_csv('output.csv', index=False)
+    # fs_methods = [f_classif, run_shap, mrmr, SelectFdr, relief]
+    #
+    # toy_example = run_toy_example()
+    # # iterate_dbs(toy_example, [run_shap])
+    #
+    # dbs = read_dbs()
+    # iterate_dbs(dbs, fs_methods)
