@@ -157,10 +157,13 @@ def iterate_dbs(dbs, fs_methods):
                     features_and_scores = get_features_scores(selector[1], X, k)
                     cols = list(features_and_scores.keys())
 
-                elif fs_method_name == 'f_classif':
-                    selector = SelectKBest(f_classif, k=k).fit(X, y)
-                    features_and_scores = get_features_scores(selector.scores_, X, k)
-                    cols = list(features_and_scores.keys())
+                elif fs_method_name == 'RFE':
+                    estimator = SVC(kernel="linear")
+                    selector = RFE(estimator, n_features_to_select=10, step=1)
+                    selector = selector.fit(X, y)
+                    cols = selector.get_feature_names_out().tolist()
+                    ranks = [1 for i in range(10)]
+                    features_and_scores = dict(zip(cols, ranks))
 
                 elif fs_method_name == 'run_shap':
                     all_features_and_scores = run_shap(X, y)
@@ -206,6 +209,7 @@ def iterate_dbs(dbs, fs_methods):
 def get_features_scores(scores, df, k):
     cols = []
     scores = scores.tolist()
+    d = sorted(scores, reverse=True)
     temp = sorted(scores)[-k:]
     for elem in temp:
         cols.append(scores.index(elem))
@@ -404,20 +408,26 @@ def run_post_hoc(algorithms_and_scores):
 
     print(sp.posthoc_dunn(long_df, val_col='auc score', group_col='filtering algorithm', p_adjust='bonferroni'))
 
+    ranks_df = df.rank(axis=1, method='max', ascending=False)
+    mean = ranks_df.mean(axis=0)
+    print('\n')
+    print(mean)
+
 
 if __name__ == '__main__':
+
     friedman_test()
 
-    # 'mRMR', 'f_classif', 'SelectFdr', 'ReliefF'
+    # # 'mRMR', 'rfe', 'SelectFdr', 'ReliefF'
     # final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
     #                                  'Filtering algorithm', 'Learning algorithm', 'Number of features selected', 'CV method', 'Fold',
     #                                  'Measure type', 'Measure value', 'List of selected features names (long STRING)',
     #                                  'Selected features scores', 'Feature selection run time', 'Fit run time',
     #                                  'Predict run time'])
     # final_df.to_csv('output.csv', index=False)
-    # fs_methods = [f_classif, run_shap, mrmr, SelectFdr, relief]
+    # fs_methods = [RFE, run_shap, mrmr, SelectFdr, relief]
     #
-    # toy_example = run_toy_example()
+    # # toy_example = run_toy_example()
     # # iterate_dbs(toy_example, [run_shap])
     #
     # dbs = read_dbs()
