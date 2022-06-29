@@ -6,13 +6,13 @@ from scipy.io import arff
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import SelectKBest, f_classif, SelectFdr, chi2, RFE, VarianceThreshold
+from sklearn.feature_selection import SelectKBest, f_classif, SelectFdr, RFE, VarianceThreshold
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold, LeavePOut
 from BorutaShap import BorutaShap
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.preprocessing import LabelEncoder, KBinsDiscretizer, PowerTransformer
+from sklearn.preprocessing import LabelEncoder, KBinsDiscretizer
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, matthews_corrcoef, roc_auc_score, average_precision_score
 from sklearn.pipeline import Pipeline
@@ -37,6 +37,8 @@ def read_dbs():
 
     :return:
     """
+    label_encoder = LabelEncoder()
+
     allaml_mat = scipy.io.loadmat('data/db1/ALLAML.mat')
     allaml_df = pd.DataFrame(allaml_mat['X'])
     allaml_df['y'] = allaml_mat['Y']
@@ -44,15 +46,17 @@ def read_dbs():
     arcene_mat = scipy.io.loadmat('data/db1/arcene.mat')
     arcene_df = pd.DataFrame(arcene_mat['X'])
     arcene_df['y'] = arcene_mat['Y']
-    #
-    # Leukemia_4c_arff = arff.loadarff('data/db2/Leukemia_4c.arff')
-    # Leukemia_4c_df = pd.DataFrame(Leukemia_4c_arff[0])
-    #
-    # Leukemia_3c_arff = arff.loadarff('data/db2/Leukemia_3c.arff')
-    # Leukemia_3c_df = pd.DataFrame(Leukemia_3c_arff[0])
 
-    # return {'ALLAML': allaml_df, 'arcene': arcene_df, 'Leukemia_3c_df': Leukemia_3c_df, 'Leukemia_4c_df': Leukemia_4c_df}
-    return {'ALLAML': allaml_df, 'arcene': arcene_df}
+    Leukemia_4c_arff = arff.loadarff('data/db2/Leukemia_4c.arff')
+    Leukemia_4c_df = pd.DataFrame(Leukemia_4c_arff[0])
+    Leukemia_4c_df['CLASS'] = label_encoder.fit_transform(Leukemia_4c_df['CLASS'])
+
+    Leukemia_3c_arff = arff.loadarff('data/db2/Leukemia_3c.arff')
+    Leukemia_3c_df = pd.DataFrame(Leukemia_3c_arff[0])
+    Leukemia_3c_df['CLASS'] = label_encoder.fit_transform(Leukemia_3c_df['CLASS'])
+
+    return {'Leukemia_3c_df': Leukemia_3c_df, 'Leukemia_4c_df': Leukemia_4c_df, 'ALLAML': allaml_df, 'arcene': arcene_df}
+    # return {'ALLAML': allaml_df, 'arcene': arcene_df}
 
 
 def fill_na(df):
@@ -115,12 +119,10 @@ def iterate_dbs(dbs, fs_methods):
     for df_name, df in dbs.items():
         df.rename(columns=lambda x: str(x), inplace=True)
         cv_method, n_splits_cv, is_select_k_best = choose_method_for_cross_validation(df)
-        # kf = cv_method(n_splits_cv)
-        kf = KFold(2)
+        kf = cv_method(n_splits_cv)
         df.columns = [*df.columns[:-1], 'y']
         X = df.loc[:, df.columns != 'y']
         y = df['y']
-        power_transformer = PowerTransformer()
 
         if is_select_k_best and X.shape[1] > 1000:
             selector = SelectKBest(f_classif, k=1000).fit(X, y)
@@ -191,20 +193,10 @@ def iterate_dbs(dbs, fs_methods):
                     X_train, X_test, y_train, y_test = new_X.iloc[train_index], new_X.iloc[test_index], \
                                                        y.iloc[train_index], y.iloc[test_index]
 
-                    #                     fill_na(X_train)
-                    #                     fill_na(X_test)
-                    #                     y_train.fillna(999, inplace=True)
-                    #                     y_test.fillna(999, inplace=True)
-
-                    #                     discretization(X_train)
-                    #                     discretization(X_test)
                     preprocess = preprocess_data
                     steps.append((f'preproccess_{k}', preprocess(X_train, X_test, y_train, y_test)))
 
-                    # X_train = power_transformer.fit_transform(X_train)
-                    # X_test = power_transformer.fit_transform(X_test)
-
-                    run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times)
+                    run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times, steps)
                     n_iters += 1
 
             evaluations = evaluate_models(accumulated_preds, accumulated_y_test)
@@ -225,7 +217,6 @@ def preprocess_data(x_train, x_test, y_train, y_test):
 def get_features_scores(scores, df, k):
     cols = []
     scores = scores.tolist()
-    d = sorted(scores, reverse=True)
     temp = sorted(scores)[-k:]
     for elem in temp:
         cols.append(scores.index(elem))
@@ -297,7 +288,6 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
         steps.append((model_name, model))
         pipe = Pipeline(steps = steps)
         pipe.fit(X_train, y_train)
-#         model.fit(X_train, y_train)
         end_time_fit_method = time.time()
         fit_method_run_time = (end_time_fit_method - start_time_fit_method)
         if model_name not in run_times['fit']:
@@ -305,7 +295,6 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
         run_times['fit'][model_name][k] = fit_method_run_time
 
         start_time_predict_method = time.time()
-#         y_pred = model.predict(X_test)
         y_pred = pipe.predict(X_test)
         end_time_predict_method = time.time()
         predict_method_run_time = (end_time_predict_method - start_time_predict_method)
@@ -337,7 +326,7 @@ def evaluate_models(accumulated_preds, accumulated_y_test):
 
             acc = accuracy_score(accumulated_y_test[k], y_preds)
             mcc = matthews_corrcoef(accumulated_y_test[k], y_preds)
-            auc_roc = roc_auc_score(accumulated_y_test[k], y_preds)
+            auc_roc = roc_auc_score(accumulated_y_test[k], y_preds, multi_class='ovr')
             pr_auc = average_precision_score(accumulated_y_test[k], y_preds)
 
             if not model_name in models_scores:
@@ -384,11 +373,6 @@ def run_toy_example():
     data = pd.read_csv('data/toy/SPECTF.train', sep=",", header=None)
     data.columns = [i for i in range(data.shape[1])]
     data = data[data.columns[::-1]]
-    # last = data[data.columns[-1]]
-    # first = data.iloc[:, 0].copy()
-    # data.iloc[:, 0] = last.copy()
-    # data[data.columns[-1]] = first
-    # data = data.transpose()
     return {'toy_example': data}
 
 
@@ -411,14 +395,13 @@ def friedman_test():
 
     fs_result = friedmanchisquare(*all_aucs)
 
-    # if fs_result.pvalue < 0.05:
-    if fs_result.pvalue < 0.2:
+    if fs_result.pvalue < 0.05:
         run_post_hoc(algorithms_and_scores)
 
 
 def run_post_hoc(algorithms_and_scores):
     """
-
+    :param algorithms_and_scores:
     :param df:
     :return:
     """
@@ -436,19 +419,19 @@ def run_post_hoc(algorithms_and_scores):
 
 if __name__ == '__main__':
 
-    friedman_test()
+    final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
+                                     'Filtering algorithm', 'Learning algorithm', 'Number of features selected', 'CV method', 'Fold',
+                                     'Measure type', 'Measure value', 'List of selected features names (long STRING)',
+                                     'Selected features scores', 'Feature selection run time', 'Fit run time',
+                                     'Predict run time'])
+    final_df.to_csv('output.csv', index=False)
 
-    # # 'mRMR', 'rfe', 'SelectFdr', 'ReliefF'
-    # final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
-    #                                  'Filtering algorithm', 'Learning algorithm', 'Number of features selected', 'CV method', 'Fold',
-    #                                  'Measure type', 'Measure value', 'List of selected features names (long STRING)',
-    #                                  'Selected features scores', 'Feature selection run time', 'Fit run time',
-    #                                  'Predict run time'])
-    # final_df.to_csv('output.csv', index=False)
-    # fs_methods = [RFE, run_shap, mrmr, SelectFdr, relief]
-    #
-    # # toy_example = run_toy_example()
-    # # iterate_dbs(toy_example, [run_shap])
-    #
-    # dbs = read_dbs()
-    # iterate_dbs(dbs, fs_methods)
+    fs_methods = [RFE, run_shap, mrmr, SelectFdr, relief]
+
+    # toy_example = run_toy_example()
+    # iterate_dbs(toy_example, [run_shap])
+
+    dbs = read_dbs()
+    iterate_dbs(dbs, fs_methods)
+
+    friedman_test()
