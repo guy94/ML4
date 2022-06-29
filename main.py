@@ -3,19 +3,22 @@ import sklearn_relief as relief
 import mrmr
 import scipy.io
 from scipy.io import arff
+from sklearn.metrics import classification_report
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import SelectKBest, f_classif, SelectFdr, RFE, VarianceThreshold
+from sklearn.feature_selection import SelectKBest, f_classif, SelectFdr, chi2, RFE, VarianceThreshold
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold, LeavePOut
 from BorutaShap import BorutaShap
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.preprocessing import LabelEncoder, KBinsDiscretizer
+from sklearn.preprocessing import LabelEncoder, KBinsDiscretizer, PowerTransformer
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, matthews_corrcoef, roc_auc_score, average_precision_score
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import LabelEncoder
 from scipy.stats import friedmanchisquare
 import scikit_posthocs as sp
 
@@ -32,31 +35,69 @@ MODELS = [nb_classifier]
 POSSIBLE_K = [2, 20]
 
 
+def convert_binary_at_target(x, target_class):
+    if x == target_class:
+        return 1
+    else:
+        return 0
+
+
 def read_dbs():
     """
 
     :return:
     """
-    label_encoder = LabelEncoder()
-
-    allaml_mat = scipy.io.loadmat('data/db1/ALLAML.mat')
-    allaml_df = pd.DataFrame(allaml_mat['X'])
-    allaml_df['y'] = allaml_mat['Y']
+    # allaml_mat = scipy.io.loadmat('data/db1/ALLAML.mat')
+    # allaml_df = pd.DataFrame(allaml_mat['X'])
+    # allaml_df['y'] = allaml_mat['Y']
 
     arcene_mat = scipy.io.loadmat('data/db1/arcene.mat')
     arcene_df = pd.DataFrame(arcene_mat['X'])
     arcene_df['y'] = arcene_mat['Y']
+    #
+    # arff_breast_data = arff.loadarff('data/db2/Breast.arff')
+    # breast_df = pd.DataFrame(arff_breast_data[0])
+    # breast_df['y'] = breast_df['Class'].apply(convert_binary_at_target, args=(b'relapse',))
+    # breast_df.drop(['Class'], axis = 1, inplace=True)
 
-    Leukemia_4c_arff = arff.loadarff('data/db2/Leukemia_4c.arff')
-    Leukemia_4c_df = pd.DataFrame(Leukemia_4c_arff[0])
-    Leukemia_4c_df['CLASS'] = label_encoder.fit_transform(Leukemia_4c_df['CLASS'])
+    # arff_cns_data = arff.loadarff('data/db2/CNS.arff')
+    # cns_df = pd.DataFrame(arff_cns_data[0])
+    # cns_df['y'] = cns_df['CLASS'].apply(convert_binary_at_target, args=(b'1',))
+    # cns_df.drop(['CLASS'], axis = 1, inplace=True)
 
-    Leukemia_3c_arff = arff.loadarff('data/db2/Leukemia_3c.arff')
-    Leukemia_3c_df = pd.DataFrame(Leukemia_3c_arff[0])
-    Leukemia_3c_df['CLASS'] = label_encoder.fit_transform(Leukemia_3c_df['CLASS'])
+    # leuk_df = pd.read_csv('data/db3/leukemiasEset.csv')
+    # leuk_df = leuk_df.T.reset_index().set_axis(leuk_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(None, axis=1)
+    # leuk_df['y'] = leuk_df['LeukemiaTypeClass']
+    # leuk_df.drop(['LeukemiaTypeClass', 'Unnamed: 0'], axis=1, inplace=True)
+    #
+    # bladder_df = pd.read_csv('data/db3/bladderbatch.csv')
+    # bladder_df = bladder_df.T.reset_index().set_axis(bladder_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(None, axis=1)
+    # bladder_df['y'] = bladder_df['CancerClass']
+    # bladder_df.drop(['CancerClass', 'Unnamed: 0'], axis=1, inplace=True)
+    #
+    # misc1_df = pd.read_csv('data/db4/journal.pone.0246039.s003.csv')
+    # misc1_df['y'] = misc1_df['response'].apply(convert_binary_at_target, args=('tumer',))
+    # misc1_df.drop(['response'], axis=1,inplace=True)
+    #
+    # misc2_df = pd.read_csv('data/db4/journal.pone.0246039.s005.csv')
+    # misc2_df['y'] = misc2_df['CLASS'].apply(convert_binary_at_target, args=('Control',))
+    # misc2_df.drop(['CLASS'], axis=1,inplace=True)
+    #
+    # efficient_fs1_df = pd.read_csv('data/db5/pone.0202167.s017.csv')
+    # efficient_fs1_df['y'] = efficient_fs1_df['class']
+    # efficient_fs1_df.drop(['class'], axis=1, inplace=True)
+    #
+    # efficient_fs2_mat = scipy.io.loadmat('data/db5/pone.0202167.s013.mat')
+    # efficient_fs2_df = pd.DataFrame(efficient_fs2_mat['X'])
+    # efficient_fs2_df['y'] = efficient_fs2_mat['Y']
 
-    return {'Leukemia_3c_df': Leukemia_3c_df, 'Leukemia_4c_df': Leukemia_4c_df, 'ALLAML': allaml_df, 'arcene': arcene_df}
-    # return {'ALLAML': allaml_df, 'arcene': arcene_df}
+    #     return {'ALLAML': allaml_df, 'arcene': arcene_df, 'Leukemia_3c_df': Leukemia_3c_df, 'Leukemia_4c_df': Leukemia_4c_df}
+    #     return {'ALLAML': allaml_df, 'arcene': arcene_df, 'breast': breast_df,
+    #            'cns' : cns_df, 'bcell_viper' : bcell_viper_df, 'bladder': bladder_df,
+    #            'misc1': misc1_df, 'misc2': misc2_df, 'efficientFS1_df' : efficient_fs1_df,
+    #            'efficientFS2_df' : efficient_fs2_df}
+
+    return {'arcene': arcene_df}
 
 
 def fill_na(df):
@@ -119,10 +160,15 @@ def iterate_dbs(dbs, fs_methods):
     for df_name, df in dbs.items():
         df.rename(columns=lambda x: str(x), inplace=True)
         cv_method, n_splits_cv, is_select_k_best = choose_method_for_cross_validation(df)
-        kf = cv_method(n_splits_cv)
+        if cv_method.__name__ == 'LeavePOut':
+            kf = cv_method(n_splits_cv)
+        else:
+            kf = cv_method(n_splits_cv, shuffle=True)
+
+        kf = KFold(2, shuffle=True)
         df.columns = [*df.columns[:-1], 'y']
         X = df.loc[:, df.columns != 'y']
-        y = df['y']
+        y = df['y'].astype('int')
 
         if is_select_k_best and X.shape[1] > 1000:
             selector = SelectKBest(f_classif, k=1000).fit(X, y)
@@ -131,11 +177,10 @@ def iterate_dbs(dbs, fs_methods):
 
         run_times = {'fs_method': {}, 'fit': {}, 'predict': {}}
 
-        n_iters = 0
-
         for fs_method in fs_methods:
             accumulated_preds = {}  # {[model]: {k: preds}}
             accumulated_y_test = {}  # {k: y_test}
+            accumulated_prob_preds = {}
 
             k_and_features_to_keep_dict = {}
             fs_method_name = fs_method.__name__
@@ -163,7 +208,7 @@ def iterate_dbs(dbs, fs_methods):
 
                 elif fs_method_name == 'RFE':
                     estimator = SVC(kernel="linear")
-                    selector = RFE(estimator, n_features_to_select=10, step=1)
+                    selector = RFE(estimator, n_features_to_select=k, step=1)
                     selector = selector.fit(X, y)
                     cols = selector.get_feature_names_out().tolist()
                     ranks = [1 for i in range(10)]
@@ -196,17 +241,18 @@ def iterate_dbs(dbs, fs_methods):
                     preprocess = preprocess_data
                     steps.append((f'preproccess_{k}', preprocess(X_train, X_test, y_train, y_test)))
 
-                    run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times, steps)
-                    n_iters += 1
+                    run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_prob_preds,
+                               accumulated_y_test, run_times, steps)
 
-            evaluations = evaluate_models(accumulated_preds, accumulated_y_test)
-            export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method.__name__, n_splits_cv,
-                        df, fs_method.__name__)
+                evaluations = evaluate_models(accumulated_preds, accumulated_prob_preds, accumulated_y_test)
+                export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method.__name__, n_splits_cv,
+                            df, fs_method.__name__)
 
 
 def preprocess_data(x_train, x_test, y_train, y_test):
     fill_na(x_train)
     fill_na(x_test)
+
     y_train.fillna(999, inplace=True)
     y_test.fillna(999, inplace=True)
 
@@ -268,7 +314,8 @@ def run_shap(X, y):
     return return_dict
 
 
-def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_y_test, run_times, steps):
+def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_prob_preds, accumulated_y_test,
+               run_times, steps):
     """
 
     :param X_train:
@@ -284,19 +331,30 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
 
     for model in MODELS:
         model_name = type(model).__name__
+
         start_time_fit_method = time.time()
         steps.append((model_name, model))
-        pipe = Pipeline(steps = steps)
+        pipe = Pipeline(steps=steps)
         pipe.fit(X_train, y_train)
         end_time_fit_method = time.time()
+
         fit_method_run_time = (end_time_fit_method - start_time_fit_method)
         if model_name not in run_times['fit']:
             run_times['fit'][model_name] = {}
         run_times['fit'][model_name][k] = fit_method_run_time
 
         start_time_predict_method = time.time()
-        y_pred = pipe.predict(X_test)
+        y_prob_pred = pipe.predict_proba(X_test)
+
         end_time_predict_method = time.time()
+        y_pred = pipe.predict(X_test)
+
+        label_encoder = LabelEncoder()
+        integer_encoded = label_encoder.fit_transform(y_pred)
+        integer_encoded = integer_encoded.reshape(-1, 1)
+        onehot_encoder = OneHotEncoder(sparse=False)
+        y_prob_pred = onehot_encoder.fit_transform(integer_encoded)
+
         predict_method_run_time = (end_time_predict_method - start_time_predict_method)
         if model_name not in run_times['predict']:
             run_times['predict'][model_name] = {}
@@ -304,14 +362,17 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
 
         if not model_name in accumulated_preds:
             accumulated_preds[model_name] = {}
+            accumulated_prob_preds[model_name] = {}
 
         if not k in accumulated_preds[model_name]:
             accumulated_preds[model_name][k] = []
+            accumulated_prob_preds[model_name][k] = []
 
         accumulated_preds[model_name][k] += y_pred.tolist()
+        accumulated_prob_preds[model_name][k] += y_prob_pred.tolist()
 
 
-def evaluate_models(accumulated_preds, accumulated_y_test):
+def evaluate_models(accumulated_preds, accumulated_prob_preds, accumulated_y_test):
     """
 
     :param accumulated_preds:
@@ -323,11 +384,24 @@ def evaluate_models(accumulated_preds, accumulated_y_test):
     models_scores = {}
     for model_name, k_and_preds in accumulated_preds.items():
         for k, y_preds in k_and_preds.items():
-
-            acc = accuracy_score(accumulated_y_test[k], y_preds)
+            y_prob_pred = accumulated_prob_preds[model_name][k]
+            multi = len(set(accumulated_y_test[k])) > 2
+            if multi:
+                multi_cls = 'ovr'
+            else:
+                multi_cls = 'raise'
+            label_encoder = LabelEncoder()
+            integer_encoded = label_encoder.fit_transform(accumulated_y_test[k])
+            integer_encoded = integer_encoded.reshape(-1, 1)
+            onehot_encoder = OneHotEncoder(sparse=False)
+            y_test_k = onehot_encoder.fit_transform(integer_encoded)
+            acc = accuracy_score(y_test_k, y_prob_pred)
             mcc = matthews_corrcoef(accumulated_y_test[k], y_preds)
-            auc_roc = roc_auc_score(accumulated_y_test[k], y_preds, multi_class='ovr')
-            pr_auc = average_precision_score(accumulated_y_test[k], y_preds)
+            auc_roc = roc_auc_score(y_test_k, y_prob_pred, multi_class=multi_cls)
+            if not multi:
+                pr_auc = average_precision_score(accumulated_y_test[k], y_preds)
+            else:
+                pr_auc = classification_report(y_test_k, y_prob_pred, output_dict=True)['macro avg']['precision']
 
             if not model_name in models_scores:
                 models_scores[model_name] = {}
@@ -401,7 +475,7 @@ def friedman_test():
 
 def run_post_hoc(algorithms_and_scores):
     """
-    :param algorithms_and_scores:
+
     :param df:
     :return:
     """
@@ -419,13 +493,13 @@ def run_post_hoc(algorithms_and_scores):
 
 if __name__ == '__main__':
 
+    # 'mRMR', 'rfe', 'SelectFdr', 'ReliefF'
     final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
                                      'Filtering algorithm', 'Learning algorithm', 'Number of features selected', 'CV method', 'Fold',
                                      'Measure type', 'Measure value', 'List of selected features names (long STRING)',
                                      'Selected features scores', 'Feature selection run time', 'Fit run time',
                                      'Predict run time'])
     final_df.to_csv('output.csv', index=False)
-
     fs_methods = [RFE, run_shap, mrmr, SelectFdr, relief]
 
     # toy_example = run_toy_example()
