@@ -554,6 +554,7 @@ def run_post_hoc(algorithms_and_scores):
     print('\n')
     print(mean)
 
+
 if __name__ == '__main__':
     final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
                                      'Filtering algorithm', 'Learning algorithm', 'Number of features selected',
