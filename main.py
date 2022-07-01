@@ -27,8 +27,6 @@ from sklearn.metrics import classification_report
 from sklearn.model_selection import StratifiedKFold
 import matplotlib.pyplot as plt
 
-
-
 random_forest = RandomForestClassifier(min_samples_leaf=2, max_depth=13)
 svm = SVC()
 knn = KNeighborsClassifier(n_neighbors=5)
@@ -36,12 +34,17 @@ nb_classifier = GaussianNB()
 logistic = LogisticRegression(random_state=0)
 onehot_encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
 MODELS = [random_forest, svm, knn, nb_classifier, logistic]
-# MODELS = [nb_classifier, random_forest]
-# posible_k = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]
 POSSIBLE_K = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]
 
 
 def convert_binary_at_target(x, target_class):
+    """
+
+    :param x:
+    :param target_class:
+    :return:
+    """
+
     if x == target_class:
         return 1
     else:
@@ -107,9 +110,6 @@ def read_dbs():
             'efficientFS2_df': efficient_fs2_df}
 
 
-#     return {'bladder':bladder_df, 'misc1':misc1_df}
-
-
 def fill_na(df):
     """
     fills NaN values for each of the split data sets.
@@ -148,7 +148,7 @@ def discretization(df):
 
 def remove_variance_zero(df):
     """
-
+    remove columns with variance 0.
     :param df:
     :return:
     """
@@ -162,7 +162,7 @@ def remove_variance_zero(df):
 
 def iterate_dbs(dbs, fs_methods):
     """
-
+    foreach db, fd_method, k, split - run fit and predict.
     :param dbs:
     :return:
     """
@@ -200,7 +200,6 @@ def iterate_dbs(dbs, fs_methods):
             fs_method_name = fs_method.__name__
             run_times['fs_method'][fs_method_name] = {}
 
-            selector = ''
             for k in POSSIBLE_K:
                 start_time_fs_method = time.time()
 
@@ -264,6 +263,15 @@ def iterate_dbs(dbs, fs_methods):
 
 
 def preprocess_data(x_train, x_test, y_train, y_test):
+    """
+    pre processing df
+    :param x_train:
+    :param x_test:
+    :param y_train:
+    :param y_test:
+    :return:
+    """
+
     fill_na(x_train)
     fill_na(x_test)
 
@@ -275,6 +283,14 @@ def preprocess_data(x_train, x_test, y_train, y_test):
 
 
 def get_features_scores(scores, df, k):
+    """
+    extract a dict of features names and their corresponding scores
+    :param scores:
+    :param df:
+    :param k:
+    :return:
+    """
+
     cols = []
     scores = scores.tolist()
     temp = sorted(scores)[-k:]
@@ -291,7 +307,7 @@ def get_features_scores(scores, df, k):
 
 def choose_method_for_cross_validation(df):
     """
-
+    determine which cross validation method to use based on data set size
     :param df:
     :return:
     """
@@ -308,10 +324,9 @@ def choose_method_for_cross_validation(df):
         return KFold, 10, False
 
 
-
 def run_shap(X, y):
     """
-
+    Our filtering algorithm, based on BorutaShap library
     :param X:
     :param y:
     :return:
@@ -332,7 +347,7 @@ def run_shap(X, y):
 def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_prob_preds, accumulated_y_test,
                run_times, steps):
     """
-
+    fit and predict each model
     :param X_train:
     :param y_train:
     :param X_test:
@@ -397,7 +412,7 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
 
 def evaluate_models(accumulated_preds, accumulated_prob_preds, accumulated_y_test):
     """
-
+    evaluate all models by 4 different metrics, considering multiclass or binary problems.
     :param accumulated_preds:
     :param accumulated_y_test:
     :param num_of_iterations:
@@ -446,6 +461,19 @@ def evaluate_models(accumulated_preds, accumulated_prob_preds, accumulated_y_tes
 
 
 def export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method_name, n_splits_cv, df, fs_method):
+    """
+    after each full iteration of all k values, append accumulated data to the final csv
+    :param df_name:
+    :param k_and_features_to_keep_dict:
+    :param run_times:
+    :param evaluations:
+    :param cv_method_name:
+    :param n_splits_cv:
+    :param df:
+    :param fs_method:
+    :return:
+    """
+
     db_rows_data = []
 
     for model in MODELS:
@@ -480,7 +508,7 @@ def run_toy_example():
 
 def friedman_test():
     """
-
+    run a statistic test on the different filtering algorithms
     :return:
     """
 
@@ -512,7 +540,7 @@ def friedman_test():
 
 def export_run_time_df(df):
     """
-
+    create run time df of each filtering algorithm
     :param df:
     :return:
     """
@@ -538,7 +566,7 @@ def export_run_time_df(df):
 
 def run_post_hoc(algorithms_and_scores):
     """
-
+    run post hoc test after friedman test
     :param df:
     :return:
     """
