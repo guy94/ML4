@@ -1,3 +1,4 @@
+import glob
 import time
 import sklearn_relief as relief
 import mrmr
@@ -21,6 +22,8 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import LabelEncoder
 from scipy.stats import friedmanchisquare
 import scikit_posthocs as sp
+import matplotlib.pyplot as plt
+
 
 
 random_forest = RandomForestClassifier(min_samples_leaf=2, max_depth=13)
@@ -29,10 +32,11 @@ knn = KNeighborsClassifier(n_neighbors=5)
 nb_classifier = GaussianNB()
 logistic = LogisticRegression(random_state=0)
 
-# MODELS = [random_forest, svm, knn, nb_classifier, logistic]
+# MODELS = [nb_classifier, random_forest, svm, knn, logistic]
 MODELS = [nb_classifier]
-# posible_k = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]
-POSSIBLE_K = [2, 20]
+# POSSIBLE_K = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]
+POSSIBLE_K = [2, 5, 20]
+onehot_encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
 
 
 def convert_binary_at_target(x, target_class):
@@ -47,13 +51,15 @@ def read_dbs():
 
     :return:
     """
+    label_encoder = LabelEncoder()
+
     # allaml_mat = scipy.io.loadmat('data/db1/ALLAML.mat')
     # allaml_df = pd.DataFrame(allaml_mat['X'])
     # allaml_df['y'] = allaml_mat['Y']
-
-    arcene_mat = scipy.io.loadmat('data/db1/arcene.mat')
-    arcene_df = pd.DataFrame(arcene_mat['X'])
-    arcene_df['y'] = arcene_mat['Y']
+    #
+    # arcene_mat = scipy.io.loadmat('data/db1/arcene.mat')
+    # arcene_df = pd.DataFrame(arcene_mat['X'])
+    # arcene_df['y'] = arcene_mat['Y']
     #
     # arff_breast_data = arff.loadarff('data/db2/Breast.arff')
     # breast_df = pd.DataFrame(arff_breast_data[0])
@@ -65,39 +71,38 @@ def read_dbs():
     # cns_df['y'] = cns_df['CLASS'].apply(convert_binary_at_target, args=(b'1',))
     # cns_df.drop(['CLASS'], axis = 1, inplace=True)
 
-    # leuk_df = pd.read_csv('data/db3/leukemiasEset.csv')
-    # leuk_df = leuk_df.T.reset_index().set_axis(leuk_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(None, axis=1)
-    # leuk_df['y'] = leuk_df['LeukemiaTypeClass']
-    # leuk_df.drop(['LeukemiaTypeClass', 'Unnamed: 0'], axis=1, inplace=True)
+    leuk_df = pd.read_csv('data/db3/leukemiasEset.csv')
+    leuk_df = leuk_df.T.reset_index().set_axis(leuk_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(None, axis=1)
+    leuk_df['y'] = leuk_df['LeukemiaTypeClass']
+    leuk_df.drop(['LeukemiaTypeClass', 'Unnamed: 0'], axis=1, inplace=True)
     #
-    # bladder_df = pd.read_csv('data/db3/bladderbatch.csv')
-    # bladder_df = bladder_df.T.reset_index().set_axis(bladder_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(None, axis=1)
-    # bladder_df['y'] = bladder_df['CancerClass']
-    # bladder_df.drop(['CancerClass', 'Unnamed: 0'], axis=1, inplace=True)
+    bladder_df = pd.read_csv('data/db3/bladderbatch.csv')
+    bladder_df = bladder_df.T.reset_index().set_axis(bladder_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(None, axis=1)
+    bladder_df['y'] = bladder_df['CancerClass']
+    bladder_df['y'] = label_encoder.fit_transform(bladder_df['y'])
+    bladder_df.drop(['CancerClass', 'Unnamed: 0'], axis=1, inplace=True)
     #
-    # misc1_df = pd.read_csv('data/db4/journal.pone.0246039.s003.csv')
-    # misc1_df['y'] = misc1_df['response'].apply(convert_binary_at_target, args=('tumer',))
-    # misc1_df.drop(['response'], axis=1,inplace=True)
-    #
-    # misc2_df = pd.read_csv('data/db4/journal.pone.0246039.s005.csv')
-    # misc2_df['y'] = misc2_df['CLASS'].apply(convert_binary_at_target, args=('Control',))
-    # misc2_df.drop(['CLASS'], axis=1,inplace=True)
-    #
-    # efficient_fs1_df = pd.read_csv('data/db5/pone.0202167.s017.csv')
-    # efficient_fs1_df['y'] = efficient_fs1_df['class']
-    # efficient_fs1_df.drop(['class'], axis=1, inplace=True)
-    #
-    # efficient_fs2_mat = scipy.io.loadmat('data/db5/pone.0202167.s013.mat')
-    # efficient_fs2_df = pd.DataFrame(efficient_fs2_mat['X'])
-    # efficient_fs2_df['y'] = efficient_fs2_mat['Y']
+    misc1_df = pd.read_csv('data/db4/journal.pone.0246039.s003.csv')
+    misc1_df['y'] = misc1_df['response'].apply(convert_binary_at_target, args=('tumer',))
+    misc1_df.drop(['response'], axis=1,inplace=True)
+
+    misc2_df = pd.read_csv('data/db4/journal.pone.0246039.s005.csv')
+    misc2_df['y'] = misc2_df['CLASS'].apply(convert_binary_at_target, args=('Control',))
+    misc2_df.drop(['CLASS'], axis=1,inplace=True)
+
+    efficient_fs1_df = pd.read_csv('data/db5/pone.0202167.s017.csv')
+    efficient_fs1_df['y'] = efficient_fs1_df['class']
+    efficient_fs1_df.drop(['class'], axis=1, inplace=True)
+
+    efficient_fs2_mat = scipy.io.loadmat('data/db5/pone.0202167.s013.mat')
+    efficient_fs2_df = pd.DataFrame(efficient_fs2_mat['X'])
+    efficient_fs2_df['y'] = efficient_fs2_mat['Y']
 
     #     return {'ALLAML': allaml_df, 'arcene': arcene_df, 'Leukemia_3c_df': Leukemia_3c_df, 'Leukemia_4c_df': Leukemia_4c_df}
-    #     return {'ALLAML': allaml_df, 'arcene': arcene_df, 'breast': breast_df,
-    #            'cns' : cns_df, 'bcell_viper' : bcell_viper_df, 'bladder': bladder_df,
-    #            'misc1': misc1_df, 'misc2': misc2_df, 'efficientFS1_df' : efficient_fs1_df,
-    #            'efficientFS2_df' : efficient_fs2_df}
+    return {'ALLAML': allaml_df, 'arcene': arcene_df, 'breast': breast_df,
+           'leuk_df' : leuk_df, 'bladder': bladder_df}
 
-    return {'arcene': arcene_df}
+    # return {'efficient_fs2_mat': efficient_fs2_df}
 
 
 def fill_na(df):
@@ -169,6 +174,11 @@ def iterate_dbs(dbs, fs_methods):
         df.columns = [*df.columns[:-1], 'y']
         X = df.loc[:, df.columns != 'y']
         y = df['y'].astype('int')
+
+        label_encoder = LabelEncoder()
+        y_encoded = label_encoder.fit_transform(y)
+        y_encoded = y_encoded.reshape(-1, 1)
+        onehot_encoder.fit(y_encoded)
 
         if is_select_k_best and X.shape[1] > 1000:
             selector = SelectKBest(f_classif, k=1000).fit(X, y)
@@ -244,9 +254,9 @@ def iterate_dbs(dbs, fs_methods):
                     run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_prob_preds,
                                accumulated_y_test, run_times, steps)
 
-                evaluations = evaluate_models(accumulated_preds, accumulated_prob_preds, accumulated_y_test)
-                export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method.__name__, n_splits_cv,
-                            df, fs_method.__name__)
+            evaluations = evaluate_models(accumulated_preds, accumulated_prob_preds, accumulated_y_test)
+            export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method.__name__, n_splits_cv,
+                        df, fs_method.__name__)
 
 
 def preprocess_data(x_train, x_test, y_train, y_test):
@@ -303,7 +313,7 @@ def run_shap(X, y):
     """
 
     selector = BorutaShap(importance_measure='shap', classification=True)
-    selector.fit(X=X, y=y, n_trials=20, sample=False, verbose=True, normalize=True)
+    selector.fit(X=X, y=y, n_trials=20, sample=False, verbose=False, normalize=True)
     accepted_dict = dict(zip(selector.accepted, [1 for i in range(len(selector.accepted))]))
     tentative_dict = dict(zip(selector.tentative, [0.5 for i in range(len(selector.tentative))]))
     rejected_dict = dict(zip(selector.rejected, [0 for i in range(len(selector.rejected))]))
@@ -352,8 +362,7 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
         label_encoder = LabelEncoder()
         integer_encoded = label_encoder.fit_transform(y_pred)
         integer_encoded = integer_encoded.reshape(-1, 1)
-        onehot_encoder = OneHotEncoder(sparse=False)
-        y_prob_pred = onehot_encoder.fit_transform(integer_encoded)
+        y_prob_pred = onehot_encoder.transform(integer_encoded)
 
         predict_method_run_time = (end_time_predict_method - start_time_predict_method)
         if model_name not in run_times['predict']:
@@ -393,8 +402,7 @@ def evaluate_models(accumulated_preds, accumulated_prob_preds, accumulated_y_tes
             label_encoder = LabelEncoder()
             integer_encoded = label_encoder.fit_transform(accumulated_y_test[k])
             integer_encoded = integer_encoded.reshape(-1, 1)
-            onehot_encoder = OneHotEncoder(sparse=False)
-            y_test_k = onehot_encoder.fit_transform(integer_encoded)
+            y_test_k = onehot_encoder.transform(integer_encoded)
             acc = accuracy_score(y_test_k, y_prob_pred)
             mcc = matthews_corrcoef(accumulated_y_test[k], y_preds)
             auc_roc = roc_auc_score(y_test_k, y_prob_pred, multi_class=multi_cls)
@@ -456,9 +464,18 @@ def friedman_test():
     :return:
     """
 
+    df = pd.DataFrame()
+    for file_name in glob.glob('output/' + '*.csv'):
+        x = pd.read_csv(file_name, low_memory=False)
+        df = pd.concat([df, x], axis=0)
+
+    df.to_csv('final_output.csv')
+
     all_aucs = []
     algorithms_and_scores = {}
-    df = pd.read_csv('output_backup.csv')
+
+    export_run_time_df(df)
+
     grouped = df.groupby(['Dataset name', 'Filtering algorithm'])
     for name, group in grouped:
         aucs = group.loc[group['Measure type'] == 'auc_roc', 'Measure value']
@@ -473,6 +490,32 @@ def friedman_test():
         run_post_hoc(algorithms_and_scores)
 
 
+def export_run_time_df(df):
+    """
+
+    :param df:
+    :return:
+    """
+
+    all_times = []
+    algorithms_and_times = {}
+
+    grouped = df.groupby(['Dataset name', 'Filtering algorithm'])
+    for name, group in grouped:
+        time = group['Feature selection run time']
+        all_times.append(time)
+        if name[1] not in algorithms_and_times:
+            algorithms_and_times[name[1]] = []
+        algorithms_and_times[name[1]] += time.tolist()
+
+    df = pd.DataFrame.from_dict(algorithms_and_times)
+    mean = df.mean(axis=0)
+    mean.to_csv('times.csv')
+    mean.plot.bar()
+    # plt.show()
+    print(mean)
+
+
 def run_post_hoc(algorithms_and_scores):
     """
 
@@ -483,7 +526,8 @@ def run_post_hoc(algorithms_and_scores):
     df = pd.DataFrame.from_dict(algorithms_and_scores)
     long_df = pd.melt(df, var_name='filtering algorithm', value_name='auc score')
 
-    print(sp.posthoc_dunn(long_df, val_col='auc score', group_col='filtering algorithm', p_adjust='bonferroni'))
+    ph = sp.posthoc_dunn(long_df, val_col='auc score', group_col='filtering algorithm', p_adjust='bonferroni')
+    ph.to_csv('post_hoc.csv')
 
     ranks_df = df.rank(axis=1, method='max', ascending=False)
     mean = ranks_df.mean(axis=0)
@@ -494,18 +538,18 @@ def run_post_hoc(algorithms_and_scores):
 if __name__ == '__main__':
 
     # 'mRMR', 'rfe', 'SelectFdr', 'ReliefF'
-    final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
-                                     'Filtering algorithm', 'Learning algorithm', 'Number of features selected', 'CV method', 'Fold',
-                                     'Measure type', 'Measure value', 'List of selected features names (long STRING)',
-                                     'Selected features scores', 'Feature selection run time', 'Fit run time',
-                                     'Predict run time'])
-    final_df.to_csv('output.csv', index=False)
-    fs_methods = [RFE, run_shap, mrmr, SelectFdr, relief]
+    # final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
+    #                                  'Filtering algorithm', 'Learning algorithm', 'Number of features selected', 'CV method', 'Fold',
+    #                                  'Measure type', 'Measure value', 'List of selected features names (long STRING)',
+    #                                  'Selected features scores', 'Feature selection run time', 'Fit run time',
+    #                                  'Predict run time'])
+    # final_df.to_csv('output.csv', index=False)
+    # fs_methods = [RFE, run_shap, mrmr, SelectFdr, relief]
 
     # toy_example = run_toy_example()
     # iterate_dbs(toy_example, [run_shap])
 
-    dbs = read_dbs()
-    iterate_dbs(dbs, fs_methods)
+    # dbs = read_dbs()
+    # iterate_dbs(dbs, fs_methods)
 
     friedman_test()
