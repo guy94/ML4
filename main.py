@@ -22,6 +22,9 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import LabelEncoder
 from scipy.stats import friedmanchisquare
 import scikit_posthocs as sp
+from scipy.io import arff
+from sklearn.metrics import classification_report
+from sklearn.model_selection import StratifiedKFold
 import matplotlib.pyplot as plt
 
 
@@ -31,12 +34,11 @@ svm = SVC()
 knn = KNeighborsClassifier(n_neighbors=5)
 nb_classifier = GaussianNB()
 logistic = LogisticRegression(random_state=0)
-
-# MODELS = [nb_classifier, random_forest, svm, knn, logistic]
-MODELS = [nb_classifier]
-# POSSIBLE_K = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]
-POSSIBLE_K = [2, 5, 20]
 onehot_encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
+MODELS = [random_forest, svm, knn, nb_classifier, logistic]
+# MODELS = [nb_classifier, random_forest]
+# posible_k = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]
+POSSIBLE_K = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100]
 
 
 def convert_binary_at_target(x, target_class):
@@ -52,57 +54,60 @@ def read_dbs():
     :return:
     """
     label_encoder = LabelEncoder()
+    allaml_mat = scipy.io.loadmat('data/db1/ALLAML.mat')
+    allaml_df = pd.DataFrame(allaml_mat['X'])
+    allaml_df['y'] = allaml_mat['Y']
 
-    # allaml_mat = scipy.io.loadmat('data/db1/ALLAML.mat')
-    # allaml_df = pd.DataFrame(allaml_mat['X'])
-    # allaml_df['y'] = allaml_mat['Y']
-    #
-    # arcene_mat = scipy.io.loadmat('data/db1/arcene.mat')
-    # arcene_df = pd.DataFrame(arcene_mat['X'])
-    # arcene_df['y'] = arcene_mat['Y']
-    #
-    # arff_breast_data = arff.loadarff('data/db2/Breast.arff')
-    # breast_df = pd.DataFrame(arff_breast_data[0])
-    # breast_df['y'] = breast_df['Class'].apply(convert_binary_at_target, args=(b'relapse',))
-    # breast_df.drop(['Class'], axis = 1, inplace=True)
+    arcene_mat = scipy.io.loadmat('data/db1/arcene.mat')
+    arcene_df = pd.DataFrame(arcene_mat['X'])
+    arcene_df['y'] = arcene_mat['Y']
 
-    # arff_cns_data = arff.loadarff('data/db2/CNS.arff')
-    # cns_df = pd.DataFrame(arff_cns_data[0])
-    # cns_df['y'] = cns_df['CLASS'].apply(convert_binary_at_target, args=(b'1',))
-    # cns_df.drop(['CLASS'], axis = 1, inplace=True)
+    arff_breast_data = arff.loadarff('data/db2/Breast.arff')
+    breast_df = pd.DataFrame(arff_breast_data[0])
+    breast_df['y'] = breast_df['Class'].apply(convert_binary_at_target, args=(b'relapse',))
+    breast_df.drop(['Class'], axis=1, inplace=True)
+
+    arff_cns_data = arff.loadarff('../input/datadb2/CNS.arff')
+    cns_df = pd.DataFrame(arff_cns_data[0])
+    cns_df['y'] = cns_df['CLASS'].apply(convert_binary_at_target, args=(b'1',))
+    label_encoder.fit_transform(cns_df['y'])
+    cns_df.drop(['CLASS'], axis=1, inplace=True)
 
     leuk_df = pd.read_csv('data/db3/leukemiasEset.csv')
-    leuk_df = leuk_df.T.reset_index().set_axis(leuk_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(None, axis=1)
+    leuk_df = leuk_df.T.reset_index().set_axis(leuk_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(None,
+                                                                                                             axis=1)
     leuk_df['y'] = leuk_df['LeukemiaTypeClass']
     leuk_df.drop(['LeukemiaTypeClass', 'Unnamed: 0'], axis=1, inplace=True)
-    #
-    bladder_df = pd.read_csv('data/db3/bladderbatch.csv')
-    bladder_df = bladder_df.T.reset_index().set_axis(bladder_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(None, axis=1)
+
+    bladder_df = pd.read_csv('../input/datadb3/bladderbatch.csv')
+    bladder_df = bladder_df.T.reset_index().set_axis(bladder_df.T.reset_index().iloc[0], axis=1).iloc[1:].rename_axis(
+        None, axis=1)
     bladder_df['y'] = bladder_df['CancerClass']
-    bladder_df['y'] = label_encoder.fit_transform(bladder_df['y'])
     bladder_df.drop(['CancerClass', 'Unnamed: 0'], axis=1, inplace=True)
-    #
-    misc1_df = pd.read_csv('data/db4/journal.pone.0246039.s003.csv')
+
+    misc1_df = pd.read_csv('../input/datadb4/journal.pone.0246039.s003.csv')
     misc1_df['y'] = misc1_df['response'].apply(convert_binary_at_target, args=('tumer',))
-    misc1_df.drop(['response'], axis=1,inplace=True)
+    misc1_df.drop(['response'], axis=1, inplace=True)
 
-    misc2_df = pd.read_csv('data/db4/journal.pone.0246039.s005.csv')
+    misc2_df = pd.read_csv('../input/datadb4/journal.pone.0246039.s005.csv')
     misc2_df['y'] = misc2_df['CLASS'].apply(convert_binary_at_target, args=('Control',))
-    misc2_df.drop(['CLASS'], axis=1,inplace=True)
+    misc2_df.drop(['CLASS'], axis=1, inplace=True)
 
-    efficient_fs1_df = pd.read_csv('data/db5/pone.0202167.s017.csv')
+    efficient_fs1_df = pd.read_csv('../input/datadb5/pone.0202167.s017.csv')
     efficient_fs1_df['y'] = efficient_fs1_df['class']
     efficient_fs1_df.drop(['class'], axis=1, inplace=True)
 
-    efficient_fs2_mat = scipy.io.loadmat('data/db5/pone.0202167.s013.mat')
+    efficient_fs2_mat = scipy.io.loadmat('../input/datadb5/pone.0202167.s013.mat')
     efficient_fs2_df = pd.DataFrame(efficient_fs2_mat['X'])
     efficient_fs2_df['y'] = efficient_fs2_mat['Y']
 
-    #     return {'ALLAML': allaml_df, 'arcene': arcene_df, 'Leukemia_3c_df': Leukemia_3c_df, 'Leukemia_4c_df': Leukemia_4c_df}
     return {'ALLAML': allaml_df, 'arcene': arcene_df, 'breast': breast_df,
-           'leuk_df' : leuk_df, 'bladder': bladder_df}
+            'cns': cns_df, 'leukemia': leuk_df, 'bladder': bladder_df,
+            'misc1': misc1_df, 'misc2': misc2_df, 'efficientFS1_df': efficient_fs1_df,
+            'efficientFS2_df': efficient_fs2_df}
 
-    # return {'efficient_fs2_mat': efficient_fs2_df}
+
+#     return {'bladder':bladder_df, 'misc1':misc1_df}
 
 
 def fill_na(df):
@@ -170,7 +175,6 @@ def iterate_dbs(dbs, fs_methods):
         else:
             kf = cv_method(n_splits_cv, shuffle=True)
 
-        kf = KFold(2, shuffle=True)
         df.columns = [*df.columns[:-1], 'y']
         X = df.loc[:, df.columns != 'y']
         y = df['y'].astype('int')
@@ -243,13 +247,12 @@ def iterate_dbs(dbs, fs_methods):
                 new_X = remove_variance_zero(new_X)
 
                 for train_index, test_index in kf.split(new_X, y):
-
                     steps = []
                     X_train, X_test, y_train, y_test = new_X.iloc[train_index], new_X.iloc[test_index], \
                                                        y.iloc[train_index], y.iloc[test_index]
 
-                    preprocess = preprocess_data
-                    steps.append((f'preproccess_{k}', preprocess(X_train, X_test, y_train, y_test)))
+                    preprocess_data(X_train, X_test, y_train, y_test)
+                    #                     steps.append((f'preproccess_{k}', preprocess(X_train, X_test, y_train, y_test)))
 
                     run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulated_prob_preds,
                                accumulated_y_test, run_times, steps)
@@ -257,6 +260,7 @@ def iterate_dbs(dbs, fs_methods):
             evaluations = evaluate_models(accumulated_preds, accumulated_prob_preds, accumulated_y_test)
             export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv_method.__name__, n_splits_cv,
                         df, fs_method.__name__)
+        print(f"Done for {df_name}")
 
 
 def preprocess_data(x_train, x_test, y_train, y_test):
@@ -304,6 +308,7 @@ def choose_method_for_cross_validation(df):
         return KFold, 10, False
 
 
+
 def run_shap(X, y):
     """
 
@@ -343,9 +348,12 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
         model_name = type(model).__name__
 
         start_time_fit_method = time.time()
-        steps.append((model_name, model))
-        pipe = Pipeline(steps=steps)
-        pipe.fit(X_train, y_train)
+        #         steps.append((model_name, model))
+        #         print(steps)
+        #         pipe = Pipeline(steps=steps)
+
+        #         pipe.fit(X_train, y_train)
+        model.fit(X_train, y_train)
         end_time_fit_method = time.time()
 
         fit_method_run_time = (end_time_fit_method - start_time_fit_method)
@@ -354,15 +362,21 @@ def run_models(X_train, y_train, X_test, y_test, k, accumulated_preds, accumulat
         run_times['fit'][model_name][k] = fit_method_run_time
 
         start_time_predict_method = time.time()
-        y_prob_pred = pipe.predict_proba(X_test)
+        #         y_prob_pred = pipe.predict_proba(X_test)
 
         end_time_predict_method = time.time()
-        y_pred = pipe.predict(X_test)
+        #         y_pred = pipe.predict(X_test)
+        y_pred = model.predict(X_test)
 
         label_encoder = LabelEncoder()
         integer_encoded = label_encoder.fit_transform(y_pred)
         integer_encoded = integer_encoded.reshape(-1, 1)
+        #         onehot_encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
         y_prob_pred = onehot_encoder.transform(integer_encoded)
+        #         mlb =MultiLabelBinarizer()
+        #         print(y_pred)
+        #         y_prob_pred = mlb.fit_transform(list(y_pred))
+        #         print(f"Y_PROB_PRED: {y_prob_pred}")
 
         predict_method_run_time = (end_time_predict_method - start_time_predict_method)
         if model_name not in run_times['predict']:
@@ -402,8 +416,14 @@ def evaluate_models(accumulated_preds, accumulated_prob_preds, accumulated_y_tes
             label_encoder = LabelEncoder()
             integer_encoded = label_encoder.fit_transform(accumulated_y_test[k])
             integer_encoded = integer_encoded.reshape(-1, 1)
+#             onehot_encoder = OneHotEncoder(sparse=False)
             y_test_k = onehot_encoder.transform(integer_encoded)
-            acc = accuracy_score(y_test_k, y_prob_pred)
+            try:
+                acc = accuracy_score(y_test_k, y_prob_pred)
+            except:
+                print(y_test_k)
+                print(y_prob_pred)
+                exit(-1)
             mcc = matthews_corrcoef(accumulated_y_test[k], y_preds)
             auc_roc = roc_auc_score(y_test_k, y_prob_pred, multi_class=multi_cls)
             if not multi:
@@ -443,7 +463,7 @@ def export_data(df_name, k_and_features_to_keep_dict, run_times, evaluations, cv
                                    k, cv_method_name, n_splits_cv, score_method, score, str(features),
                                    features_scores,
                                    fs_method_time, fit_method_time, predict_method_time]
-                print(single_row_data)
+#                 print(single_row_data)
                 db_rows_data.append(single_row_data)
 
     df = pd.DataFrame(data=db_rows_data)
@@ -534,22 +554,20 @@ def run_post_hoc(algorithms_and_scores):
     print('\n')
     print(mean)
 
-
 if __name__ == '__main__':
+    final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
+                                     'Filtering algorithm', 'Learning algorithm', 'Number of features selected',
+                                     'CV method', 'Fold',
+                                     'Measure type', 'Measure value', 'List of selected features names (long STRING)',
+                                     'Selected features scores', 'Feature selection run time', 'Fit run time',
+                                     'Predict run time'])
+    final_df.to_csv('output.csv', index=False)
+    fs_methods = [RFE, run_shap, mrmr, SelectFdr, relief]
 
-    # 'mRMR', 'rfe', 'SelectFdr', 'ReliefF'
-    # final_df = pd.DataFrame(columns=['Dataset name', 'Number of samples', 'Original number of features',
-    #                                  'Filtering algorithm', 'Learning algorithm', 'Number of features selected', 'CV method', 'Fold',
-    #                                  'Measure type', 'Measure value', 'List of selected features names (long STRING)',
-    #                                  'Selected features scores', 'Feature selection run time', 'Fit run time',
-    #                                  'Predict run time'])
-    # final_df.to_csv('output.csv', index=False)
-    # fs_methods = [RFE, run_shap, mrmr, SelectFdr, relief]
+    toy_example = run_toy_example()
+    iterate_dbs(toy_example, [run_shap])
 
-    # toy_example = run_toy_example()
-    # iterate_dbs(toy_example, [run_shap])
-
-    # dbs = read_dbs()
-    # iterate_dbs(dbs, fs_methods)
+    dbs = read_dbs()
+    iterate_dbs(dbs, fs_methods)
 
     friedman_test()
