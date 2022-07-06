@@ -23,7 +23,7 @@ Each individual cell (representing two feature selection methods) containing a v
 ![image](https://user-images.githubusercontent.com/62709275/177505099-4b97de22-f2c7-4831-9865-aafb06cf1151.png)
 
 ## Conclusions
-RFE was determined to be the superior fearure selection algorithm due to best scoring and low run time.
+SelectFdr was determined to be the superior fearure selection algorithm due to best scoring and low run time.
 
 
 
