@@ -14,14 +14,13 @@ After collecting all the predictions results, run time of each method and more, 
 ## The Post-Hoc Test Matrix
 ![image](https://user-images.githubusercontent.com/62709275/177503509-3731ab3e-9715-4959-8792-99855f56b4ab.png)
 
-## Feature Selection Methods Ranks
+Each individual cell (representing two feature selection methods) containing a value < 0.05 means that one algorithm is significantly better than the other. In order to determine which is better of the two, we calculated the ranks of the algorithms based on th average ROC AUC score achieved. Low rank - better algorithm.
+
+### Ranks
 ![image](https://user-images.githubusercontent.com/62709275/177504659-e398845a-c5ce-4310-a48c-3e9afd2fb7bc.png)
 
 ## Mean Run Time Chart
 ![image](https://user-images.githubusercontent.com/62709275/177505099-4b97de22-f2c7-4831-9865-aafb06cf1151.png)
-
-
-Each individual cell (representing two feature selection methods) containing a value < 0.05 means that one algorithm is significantly better than the other. In order to determine which is better of the two, we calculated the ranks of the algorithms based on th average ROC AUC score achieved. Low rank - better algorithm.
 
 ## Conclusions
 RFE was determined to be the superior fearure selection algorithm due to best scoring and low run time.
